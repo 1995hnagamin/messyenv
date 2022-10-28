@@ -44,7 +44,18 @@ fn run_install_script(name: &str) -> Result<(), Box<dyn Error>> {
             let mut workdir = root;
             workdir.push("workdir");
             workdir.push(name);
-            fs::create_dir(&workdir)?;
+            if workdir.as_path().exists() {
+                let prompt = format!(
+                    "Path {} exists. Proceed anyway?",
+                    workdir.as_path().to_str().unwrap()
+                );
+                let proceed = ask_user_input(&prompt, false)?;
+                if !proceed {
+                    std::process::exit(0);
+                }
+            } else {
+                fs::create_dir(&workdir)?;
+            }
 
             setmessyenv()?;
             env::set_current_dir(&workdir)?;
@@ -114,6 +125,36 @@ fn exec_shell() -> Result<(), Box<dyn Error>> {
     let err = unistd::execvp(&cmd[0], &cmd).unwrap_err();
     println!("messyenv: {}", err.to_string());
     std::process::exit(1);
+}
+
+fn ask_user_input(prompt: &str, default: bool) -> Result<bool, Box<dyn Error>> {
+    use std::collections::HashMap;
+    use std::io;
+    use std::io::Write;
+
+    let dict = [
+        ("", default),
+        ("yes", true),
+        ("y", true),
+        ("Y", true),
+        ("no", false),
+        ("n", false),
+        ("N", false),
+    ]
+    .iter()
+    .map(|(s, b)| (s.to_string(), *b))
+    .collect::<HashMap<String, bool>>();
+    loop {
+        print!("{} [{}] > ", prompt, if default { "Y/n" } else { "y/N" });
+        io::stdout().flush()?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let answer = input.trim().to_string();
+        match dict.get(&answer) {
+            Some(val) => return Ok(*val),
+            None => {}
+        }
+    }
 }
 
 fn get_messyenv_root() -> Result<PathBuf, Box<dyn Error>> {
