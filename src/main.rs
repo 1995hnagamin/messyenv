@@ -30,7 +30,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn start_shell() -> Result<(), Box<dyn Error>> {
     use unistd::ForkResult;
     match unsafe { unistd::fork() }? {
-        ForkResult::Child => exec_shell(),
+        ForkResult::Child => {
+            setmessyenv()?;
+            exec_shell()
+        }
         ForkResult::Parent { child: _ } => {
             use nix::sys::wait::WaitStatus::*;
             match nix::sys::wait::wait()? {
@@ -43,7 +46,7 @@ fn start_shell() -> Result<(), Box<dyn Error>> {
     }
 }
 
-fn exec_shell() -> Result<(), Box<dyn Error>> {
+fn setmessyenv() -> Result<(), Box<dyn Error>> {
     unsafe {
         let mut dir = env::current_dir()?;
         dir.push(".messyenv");
@@ -60,6 +63,10 @@ fn exec_shell() -> Result<(), Box<dyn Error>> {
             1,
         );
     }
+    Ok(())
+}
+
+fn exec_shell() -> Result<(), Box<dyn Error>> {
     let cmd = ["bash"]
         .iter()
         .map(|s| CString::new(s.to_string()).unwrap())
