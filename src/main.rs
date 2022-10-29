@@ -118,7 +118,9 @@ fn setmessyenv() -> Result<(), Box<dyn Error>> {
 }
 
 fn exec_shell() -> Result<(), Box<dyn Error>> {
-    let cmd = ["bash"]
+    let mut ifilepath = get_messyenv_root()?;
+    ifilepath.push("environment");
+    let cmd = ["bash", "--init-file", ifilepath.as_os_str().to_str().unwrap()]
         .iter()
         .map(|s| CString::new(s.to_string()).unwrap())
         .collect::<Vec<_>>();
