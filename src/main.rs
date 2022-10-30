@@ -28,6 +28,8 @@ enum Commands {
 enum MessyError {
     #[error(".messyenv/ not found")]
     RootNotFound,
+    #[error("child process error")]
+    ChildProcessError { status: std::process::ExitStatus },
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -110,21 +112,25 @@ fn run_install_script(name: &str) -> Result<(), Box<dyn Error>> {
 }
 
 fn start_shell() -> Result<(), Box<dyn Error>> {
-    use unistd::ForkResult;
-    match unsafe { unistd::fork() }? {
-        ForkResult::Child => {
-            setmessyenv()?;
-            exec_shell()
-        }
-        ForkResult::Parent { child: _ } => {
-            use nix::sys::wait::WaitStatus::*;
-            match nix::sys::wait::wait()? {
-                Exited(_, _) => Ok(()),
-                _ => {
-                    panic!("unimpremented")
-                }
-            }
-        }
+    use std::ffi::OsStr;
+    use std::process::Command;
+    let meroot = get_messyenv_root()?;
+    let mut melocal = meroot.clone();
+    melocal.push("local");
+    let mut ifilepath = meroot.clone();
+    ifilepath.push("environment");
+    let mut child = Command::new("bash")
+        .args([OsStr::new("--init-file"), ifilepath.as_os_str()])
+        .env("MESSYENVROOT", meroot.into_os_string())
+        .env("MESSYENVLOCAL", melocal.into_os_string())
+        .spawn()
+        .expect("bash failed to start");
+    let status = child.wait()?;
+    if status.success() {
+        println!("done.");
+        Ok(())
+    } else {
+        Err(Box::new(MessyError::ChildProcessError { status }))
     }
 }
 
@@ -147,22 +153,6 @@ fn setmessyenv() -> Result<(), Box<dyn Error>> {
         );
     }
     Ok(())
-}
-
-fn exec_shell() -> Result<(), Box<dyn Error>> {
-    let mut ifilepath = get_messyenv_root()?;
-    ifilepath.push("environment");
-    let cmd = [
-        "bash",
-        "--init-file",
-        ifilepath.as_os_str().to_str().unwrap(),
-    ]
-    .iter()
-    .map(|s| CString::new(s.to_string()).unwrap())
-    .collect::<Vec<_>>();
-    let err = unistd::execvp(&cmd[0], &cmd).unwrap_err();
-    println!("messyenv: {}", err.to_string());
-    std::process::exit(1);
 }
 
 fn ask_user_input(prompt: &str, default: bool) -> Result<bool, Box<dyn Error>> {
