@@ -1,11 +1,9 @@
 use clap::{Parser, Subcommand};
-use nix::libc;
 use nix::unistd;
 use std::env;
 use std::error::Error;
 use std::ffi::CString;
 use std::fs;
-use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 use thiserror;
 
@@ -130,6 +128,8 @@ fn start_shell() -> Result<(), Box<dyn Error>> {
 }
 
 fn setmessyenv() -> Result<(), Box<dyn Error>> {
+    use nix::libc;
+    use std::os::unix::ffi::OsStrExt;
     unsafe {
         let mut dir = get_messyenv_root()?;
         libc::setenv(
