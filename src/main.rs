@@ -7,6 +7,7 @@ use std::ffi::CString;
 use std::fs;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
+use thiserror;
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -23,6 +24,12 @@ enum Commands {
     Install { name: String },
     /// Start a shell within the messy environment
     Shell,
+}
+
+#[derive(thiserror::Error, Debug)]
+enum MessyError {
+    #[error(".messyenv/ not found")]
+    RootNotFound,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -188,7 +195,12 @@ fn ask_user_input(prompt: &str, default: bool) -> Result<bool, Box<dyn Error>> {
 }
 
 fn get_messyenv_root() -> Result<PathBuf, Box<dyn Error>> {
+    use std::path::Path;
     let mut dir = env::current_dir()?;
     dir.push(".messyenv");
-    Ok(dir)
+    if Path::new(&dir).is_dir() {
+        Ok(dir)
+    } else {
+        Err(Box::new(MessyError::RootNotFound))
+    }
 }

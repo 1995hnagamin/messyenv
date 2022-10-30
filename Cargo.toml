@@ -11,3 +11,4 @@ license = "Apache-2.0"
 [dependencies]
 nix = "0.25.0"
 clap = {version = "3.2.23", features = ["derive"]}
+thiserror = "1.0.37"
