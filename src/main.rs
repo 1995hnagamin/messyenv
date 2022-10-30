@@ -45,6 +45,7 @@ fn init_messyenv() -> Result<(), Box<dyn Error>> {
     let mut path = env::current_dir()?;
     path.push(".messyenv");
     fs::create_dir(&path)?;
+    let root = path.clone();
     path.push("install-scripts");
     fs::create_dir(&path)?;
     path.pop();
@@ -57,7 +58,7 @@ fn init_messyenv() -> Result<(), Box<dyn Error>> {
     path.push("environment");
     let mut envfile = fs::File::create(path)?;
     envfile.write_all(include_bytes!("environment.in"))?;
-    println!("Initialized messy environment");
+    println!("Initialized messy environment ({})", root.display());
     Ok(())
 }
 
