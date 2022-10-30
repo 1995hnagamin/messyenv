@@ -1,8 +1,6 @@
 use clap::{Parser, Subcommand};
-use nix::unistd;
 use std::env;
 use std::error::Error;
-use std::ffi::CString;
 use std::fs;
 use std::path::PathBuf;
 use thiserror;
@@ -65,49 +63,42 @@ fn init_messyenv() -> Result<(), Box<dyn Error>> {
 }
 
 fn run_install_script(name: &str) -> Result<(), Box<dyn Error>> {
-    use unistd::ForkResult::*;
-    match unsafe { unistd::fork() }? {
-        Child => {
-            let root = get_messyenv_root()?;
-            let mut scriptpath = root.clone();
-            scriptpath.push("install-scripts");
-            scriptpath.push(name);
+    use std::process::Command;
+    let root = get_messyenv_root()?;
+    let mut scriptpath = root.clone();
+    scriptpath.push("install-scripts");
+    scriptpath.push(name);
 
-            let mut workdir = root;
-            workdir.push("workdir");
-            workdir.push(name);
-            if workdir.as_path().exists() {
-                let prompt = format!(
-                    "Path {} exists. Proceed anyway?",
-                    workdir.as_path().to_str().unwrap()
-                );
-                let proceed = ask_user_input(&prompt, false)?;
-                if !proceed {
-                    std::process::exit(0);
-                }
-            } else {
-                fs::create_dir(&workdir)?;
-            }
-
-            setmessyenv()?;
-            env::set_current_dir(&workdir)?;
-            let cmd = ["bash", scriptpath.as_os_str().to_str().unwrap()]
-                .iter()
-                .map(|s| CString::new(s.to_string()).unwrap())
-                .collect::<Vec<_>>();
-            let err = unistd::execvp(&cmd[0], &cmd).unwrap_err();
-            println!("messyenv: {}", err.to_string());
-            std::process::exit(1);
+    let mut workdir = root.clone();
+    workdir.push("workdir");
+    workdir.push(name);
+    if workdir.as_path().exists() {
+        let prompt = format!(
+            "Path {} exists. Proceed anyway?",
+            workdir.as_path().to_str().unwrap()
+        );
+        let proceed = ask_user_input(&prompt, false)?;
+        if !proceed {
+            std::process::exit(0);
         }
-        Parent { child: _ } => {
-            use nix::sys::wait::WaitStatus::*;
-            match nix::sys::wait::wait()? {
-                Exited(_, _) => Ok(()),
-                _ => {
-                    panic!("unimpremented")
-                }
-            }
-        }
+    } else {
+        fs::create_dir(&workdir)?;
+    }
+    let mut melocal = root.clone();
+    melocal.push("local");
+    let mut child = Command::new("bash")
+        .args([scriptpath.as_os_str()])
+        .current_dir(workdir.as_os_str())
+        .env("MESSYENVROOT", root.into_os_string())
+        .env("MESSYENVLOCAL", melocal.into_os_string())
+        .spawn()
+        .expect("bash failed to start");
+    let status = child.wait()?;
+    if status.success() {
+        println!("done.");
+        Ok(())
+    } else {
+        Err(Box::new(MessyError::ChildProcessError { status }))
     }
 }
 
@@ -132,27 +123,6 @@ fn start_shell() -> Result<(), Box<dyn Error>> {
     } else {
         Err(Box::new(MessyError::ChildProcessError { status }))
     }
-}
-
-fn setmessyenv() -> Result<(), Box<dyn Error>> {
-    use nix::libc;
-    use std::os::unix::ffi::OsStrExt;
-    unsafe {
-        let mut dir = get_messyenv_root()?;
-        libc::setenv(
-            CString::new("MESSYENVROOT")?.as_ptr(),
-            CString::new(dir.clone().into_os_string().as_bytes())?.as_ptr(),
-            1,
-        );
-
-        dir.push("local");
-        libc::setenv(
-            CString::new("MESSYENVLOCAL")?.as_ptr(),
-            CString::new(dir.into_os_string().as_bytes())?.as_ptr(),
-            1,
-        );
-    }
-    Ok(())
 }
 
 fn ask_user_input(prompt: &str, default: bool) -> Result<bool, Box<dyn Error>> {
