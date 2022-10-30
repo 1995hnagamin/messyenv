@@ -17,6 +17,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Initialize messy environment
+    Init,
     /// Install
     Install { name: String },
     /// Start a shell within the messy environment
@@ -27,9 +29,31 @@ fn main() -> Result<(), Box<dyn Error>> {
     use Commands::*;
     let cli = Cli::parse();
     match &cli.command {
+        Init => init_messyenv(),
         Install { name } => run_install_script(name),
         Shell => start_shell(),
     }
+}
+
+fn init_messyenv() -> Result<(), Box<dyn Error>> {
+    use std::io::Write;
+    let mut path = env::current_dir()?;
+    path.push(".messyenv");
+    fs::create_dir(&path)?;
+    path.push("install-scripts");
+    fs::create_dir(&path)?;
+    path.pop();
+    path.push("local");
+    fs::create_dir(&path)?;
+    path.pop();
+    path.push("workdir");
+    fs::create_dir(&path)?;
+    path.pop();
+    path.push("environment");
+    let mut envfile = fs::File::create(path)?;
+    envfile.write_all(include_bytes!("environment.in"))?;
+    println!("Initialized messy environment");
+    Ok(())
 }
 
 fn run_install_script(name: &str) -> Result<(), Box<dyn Error>> {
