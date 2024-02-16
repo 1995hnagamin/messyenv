@@ -1,6 +1,6 @@
 [package]
 name = "messyenv"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 author = ["Nagamine, Hideaki <1995.hnagamin@gmail.com>"]
 description = "A command-line tool to mess up your local environment"
